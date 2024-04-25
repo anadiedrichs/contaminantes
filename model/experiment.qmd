@@ -1,0 +1,306 @@
+---
+title: "document"
+format: html
+editor: visual
+---
+
+## Load dataset
+
+```{r}
+
+library(readr)
+database <- read_rds("../data/database.rds")
+
+colnames(database)
+```
+
+
+```{r}
+nrow(database)
+```
+
+```{r}
+summary(database)
+```
+
+## Cleaning
+
+- Tener en cuenta Temperatura, Humedad relativa, Presión atmosférica, Velocidad de viento, CO, NO, NO2, O3 como variables predictoras de PM10.
+
+- Remuevo NA 
+
+```{r}
+library(dplyr)
+library(tidyr)
+data <- database %>% select(-one_of(c("Estación","time"))) 
+data <- data[complete.cases(data),]
+```
+
+```{r}
+nrow(data)
+```
+
+```{r}
+summary(data)
+```
+
+- Discretizar la variable Material Particulado (PM10) tomando como umbral el valor de 45 µg/m3, por debajo del cual se categorizará como "Bueno". Por encima de 45 µg/m3, se asignará el valor "Malo".
+
+```{r}
+y_col_name <- colnames(data)[10]
+y_cut <- cut(data$`PM10 (ug/m3)`,breaks=c(-10,45,400),labels = c("Bueno","Malo"))
+data$PM10 <- y_cut
+```
+
+# Pearson correlation
+
+```{r}
+library(DataExplorer)
+plot_correlation(data)
+
+```
+```{r}
+
+plot_boxplot(data, by = "PM10")
+```
+```{r}
+
+plot_bar(data)
+```
+
+# 
+
+```{r}
+
+data <- data %>% select(-one_of(c("PM10 (ug/m3)")))
+```
+
+# Modelos 
+
+## Separación de sets de datos 
+
+```{r}
+library(tidymodels)
+set.seed(123)
+splits      <- initial_split(data, strata = PM10, prop = 3/4) 
+
+data_train <- training(splits) # 75 % entrenamiento
+data_test  <- testing(splits)  # 25 % en testeo
+```
+
+# Clasificación binaria
+
+## Regresion logistica 
+
+```{r}
+lr_mod <- 
+  logistic_reg(penalty = tune(), mixture = 1) %>% 
+  set_engine("glmnet")
+```
+
+Receta
+
+```{r}
+lr_recipe <- 
+  recipe(PM10 ~ ., data = data_train) %>% 
+  step_normalize(all_predictors())
+```
+
+Grid tunning 
+
+```{r}
+lr_workflow <- 
+  workflow() %>% 
+  add_model(lr_mod) %>% 
+  add_recipe(lr_recipe)
+```
+
+Since we have only one hyperparameter to tune here, we can set the grid up manually using a one-column tibble with 30 candidate values:
+
+```{r}
+lr_reg_grid <- tibble(penalty = 10^seq(-4, -1, length.out = 30))
+
+```
+```{r}
+lr_reg_grid
+```
+Conjunto de validación para usar durante el entrenamiento
+
+```{r}
+set.seed(234)
+# 20 %
+val_set <- validation_split(data_train, 
+                            strata = PM10, 
+                            prop = 0.80)
+```
+
+
+```{r}
+lr_res <- 
+  lr_workflow %>% 
+  tune_grid(val_set,
+            grid = lr_reg_grid,
+            control = control_grid(save_pred = TRUE),
+            metrics = metric_set(roc_auc))
+
+
+```
+```{r}
+lr_res
+```
+
+
+```{r}
+lr_plot <- 
+  lr_res %>% 
+  collect_metrics() %>% 
+  ggplot(aes(x = penalty, y = mean)) + 
+  geom_point() + 
+  geom_line() + 
+  ylab("Area under the ROC Curve") +
+  scale_x_log10(labels = scales::label_number())
+
+lr_plot 
+```
+## Mejores modelos de Logistic Regression  
+
+```{r}
+top_models <-
+  lr_res %>% 
+  show_best(metric = "roc_auc", n = 15) %>% 
+  arrange(penalty) 
+top_models
+
+```
+
+```{r}
+lr_best <- 
+  lr_res %>% 
+  collect_metrics() %>% 
+  arrange(penalty) %>% 
+  slice(12) # modelo 12
+
+lr_best
+```
+```{r}
+lr_auc <- 
+  lr_res %>% 
+  collect_predictions(parameters = lr_best) %>% 
+  roc_curve(PM10, .pred_Bueno) %>% 
+  mutate(model = "Logistic Regression")
+
+autoplot(lr_auc)
+```
+
+
+# Random Forest
+
+```{r}
+cores <- parallel::detectCores()
+#cores
+
+rf_mod <- 
+  rand_forest(mtry = tune(), min_n = tune(), trees = 100) %>% 
+  set_engine("ranger", num.threads = cores) %>% 
+  set_mode("classification")
+```
+
+```{r}
+rf_recipe <- 
+  recipe(PM10 ~ ., data = data_train)
+```
+
+```{r}
+rf_workflow <- 
+  workflow() %>% 
+  add_model(rf_mod) %>% 
+  add_recipe(rf_recipe)
+```
+
+```{r}
+set.seed(345)
+rf_res <- 
+  rf_workflow %>% 
+  tune_grid(val_set,
+            grid = 25,
+            control = control_grid(save_pred = TRUE),
+            metrics = metric_set(roc_auc))
+```
+
+```{r}
+rf_res %>% 
+  show_best(metric = "roc_auc")
+```
+
+```{r}
+autoplot(rf_res)
+```
+
+```{r}
+rf_best <- 
+  rf_res %>% 
+  select_best(metric = "roc_auc")
+rf_best
+```
+
+To filter the predictions for only our best random forest model, we can use the parameters argument and pass it our tibble with the best hyperparameter values from tuning, which we called rf_best:
+
+
+```{r}
+rf_auc <- 
+  rf_res %>% 
+  collect_predictions(parameters = rf_best) %>% 
+  roc_curve(PM10, .pred_Bueno) %>% 
+  mutate(model = "Random Forest")
+```
+
+```{r}
+bind_rows(rf_auc, lr_auc) %>% 
+  ggplot(aes(x = 1 - specificity, y = sensitivity, col = model)) + 
+  geom_path(lwd = 1.5, alpha = 0.8) +
+  geom_abline(lty = 3) + 
+  coord_equal() + 
+  scale_color_viridis_d(option = "plasma", end = .6)
+```
+
+
+The random forest is uniformly better across event probability thresholds.
+
+### last random forest fit 
+
+```{r}
+# the last model
+last_rf_mod <- 
+  rand_forest(mtry = 6, min_n = 10, trees = 100) %>% 
+  set_engine("ranger", num.threads = cores, importance = "impurity") %>% 
+  set_mode("classification")
+
+# the last workflow
+last_rf_workflow <- 
+  rf_workflow %>% 
+  update_model(last_rf_mod)
+
+# the last fit
+set.seed(345)
+last_rf_fit <- 
+  last_rf_workflow %>% 
+  last_fit(splits)
+
+last_rf_fit
+```
+# Vip Variable importance 
+
+```{r}
+library(vip)
+last_rf_fit %>% 
+  extract_fit_parsnip() %>% 
+  vip(num_features = 10)
+```
+
+```{r}
+last_rf_fit %>% 
+  collect_predictions() %>% 
+  roc_curve(PM10, .pred_Bueno) %>% 
+  autoplot()
+```
+
