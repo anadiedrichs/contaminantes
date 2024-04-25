@@ -1,7 +1,9 @@
 ---
 title: "document"
-format: html
-editor: visual
+format: 
+  html: default
+  pdf: default
+editor: source
 ---
 
 ## Load dataset
@@ -14,7 +16,6 @@ database <- read_rds("../data/database.rds")
 colnames(database)
 ```
 
-
 ```{r}
 nrow(database)
 ```
@@ -25,9 +26,9 @@ summary(database)
 
 ## Cleaning
 
-- Tener en cuenta Temperatura, Humedad relativa, Presión atmosférica, Velocidad de viento, CO, NO, NO2, O3 como variables predictoras de PM10.
+-   Tener en cuenta Temperatura, Humedad relativa, Presión atmosférica, Velocidad de viento, CO, NO, NO2, O3 como variables predictoras de PM10.
 
-- Remuevo NA 
+-   Remuevo NA
 
 ```{r}
 library(dplyr)
@@ -44,7 +45,7 @@ nrow(data)
 summary(data)
 ```
 
-- Discretizar la variable Material Particulado (PM10) tomando como umbral el valor de 45 µg/m3, por debajo del cual se categorizará como "Bueno". Por encima de 45 µg/m3, se asignará el valor "Malo".
+-   Discretizar la variable Material Particulado (PM10) tomando como umbral el valor de 45 µg/m3, por debajo del cual se categorizará como "Bueno". Por encima de 45 µg/m3, se asignará el valor "Malo".
 
 ```{r}
 y_col_name <- colnames(data)[10]
@@ -59,10 +60,12 @@ library(DataExplorer)
 plot_correlation(data)
 
 ```
+
 ```{r}
 
 plot_boxplot(data, by = "PM10")
 ```
+
 ```{r}
 
 plot_bar(data)
@@ -75,9 +78,9 @@ plot_bar(data)
 data <- data %>% select(-one_of(c("PM10 (ug/m3)")))
 ```
 
-# Modelos 
+# Modelos
 
-## Separación de sets de datos 
+## Separación de sets de datos
 
 ```{r}
 library(tidymodels)
@@ -90,7 +93,7 @@ data_test  <- testing(splits)  # 25 % en testeo
 
 # Clasificación binaria
 
-## Regresion logistica 
+## Regresion logistica
 
 ```{r}
 lr_mod <- 
@@ -106,7 +109,7 @@ lr_recipe <-
   step_normalize(all_predictors())
 ```
 
-Grid tunning 
+Grid tunning
 
 ```{r}
 lr_workflow <- 
@@ -121,9 +124,11 @@ Since we have only one hyperparameter to tune here, we can set the grid up manua
 lr_reg_grid <- tibble(penalty = 10^seq(-4, -1, length.out = 30))
 
 ```
+
 ```{r}
 lr_reg_grid
 ```
+
 Conjunto de validación para usar durante el entrenamiento
 
 ```{r}
@@ -133,7 +138,6 @@ val_set <- validation_split(data_train,
                             strata = PM10, 
                             prop = 0.80)
 ```
-
 
 ```{r}
 lr_res <- 
@@ -145,10 +149,10 @@ lr_res <-
 
 
 ```
+
 ```{r}
 lr_res
 ```
-
 
 ```{r}
 lr_plot <- 
@@ -162,7 +166,8 @@ lr_plot <-
 
 lr_plot 
 ```
-## Mejores modelos de Logistic Regression  
+
+## Mejores modelos de Logistic Regression
 
 ```{r}
 top_models <-
@@ -182,6 +187,7 @@ lr_best <-
 
 lr_best
 ```
+
 ```{r}
 lr_auc <- 
   lr_res %>% 
@@ -191,7 +197,6 @@ lr_auc <-
 
 autoplot(lr_auc)
 ```
-
 
 # Random Forest
 
@@ -245,7 +250,6 @@ rf_best
 
 To filter the predictions for only our best random forest model, we can use the parameters argument and pass it our tibble with the best hyperparameter values from tuning, which we called rf_best:
 
-
 ```{r}
 rf_auc <- 
   rf_res %>% 
@@ -263,10 +267,9 @@ bind_rows(rf_auc, lr_auc) %>%
   scale_color_viridis_d(option = "plasma", end = .6)
 ```
 
-
 The random forest is uniformly better across event probability thresholds.
 
-### last random forest fit 
+### last random forest fit
 
 ```{r}
 # the last model
@@ -288,7 +291,8 @@ last_rf_fit <-
 
 last_rf_fit
 ```
-# Vip Variable importance 
+
+# Vip Variable importance
 
 ```{r}
 library(vip)
@@ -303,4 +307,3 @@ last_rf_fit %>%
   roc_curve(PM10, .pred_Bueno) %>% 
   autoplot()
 ```
-
