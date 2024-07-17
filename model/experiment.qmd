@@ -56,6 +56,14 @@ data <- data[complete.cases(data),]
 ```{r}
 colnames(data)
 ```
+* Procedo a quitar las unidades al nombre de cada variable. Esto hará más legible los gráficos.
+Por supuesto que en paper debe explicarse cada variable y sus unidades.
+
+```{r}
+library(stringr)
+colnames(data) <- str_replace(colnames(data),pattern="\\s+\\(\\S+", "")
+```
+
 * Se lista un resumen de los datos.
 
 ```{r}
@@ -63,31 +71,33 @@ summary(data)
 ```
 
 *  Discretizar la variable Material Particulado (PM10) tomando como umbral el valor de 45 µg/m3, por debajo del cual se categorizará como "Bueno". Por encima de 45 µg/m3, se asignará el valor "Malo".
-* Se crea la variable (columna) con nombre PM10.
 
 ```{r}
 y_col_name <- colnames(data)[10]
-y_cut <- cut(data$`PM10 (ug/m3)`,breaks=c(-10,45,400),labels = c("Bueno","Malo"))
+y_cut <- cut(data$PM10,breaks=c(-10,45,400),labels = c("Bueno","Malo"))
 data$PM10 <- y_cut
 ```
 
-Quitamos la columna con nombre "PM10 (ug/m3)" pues ahora usamos PM10
-
-```{r}
-
-data <- data %>% select(-one_of(c("PM10 (ug/m3)")))
-```
 
 # Pearson correlation
 
 ```{r}
 plot_correlation(data)
-
 ```
+
+```{r}
+ggsave(filename = "./figs-to-paper/01-pearson-correlation.tiff",units = "px", dpi=300)
+```
+
 
 ```{r}
 
 plot_boxplot(data, by = "PM10")
+
+```
+
+```{r}
+ggsave(filename = "./figs-to-paper/02-boxplot.tiff",units = "px", dpi=300)
 ```
 
 ```{r}
@@ -95,6 +105,10 @@ plot_boxplot(data, by = "PM10")
 plot_bar(data)
 ```
 
+
+```{r}
+ggsave(filename = "./figs-to-paper/03-dataset-desbalanceado.tiff",units = "px", dpi=300)
+```
 
 
 # Modelos
@@ -225,6 +239,12 @@ lr_plot <-
 lr_plot 
 ```
 
+```{r}
+ggsave(filename = "./figs-to-paper/04-log-reg-tunning-results.tiff",units = "px", dpi=300)
+```
+
+
+
 Este gráfico nos muestra que el rendimiento del modelo es generalmente mejor con los valores de penalización más bajos. 
 Esto sugiere que la mayoría de los predictores son importantes para el modelo. También vemos una caída pronunciada en el área bajo la curva ROC hacia los valores de penalización más altos. 
 Esto sucede porque una penalización lo suficientemente grande eliminará todos los predictores del modelo y, como era de esperar, la precisión predictiva se desploma usando menos predictores en el modelo.
@@ -295,9 +315,11 @@ lr_auc <-
 
 autoplot(lr_auc)
 ```
+```{r}
+ggsave(filename = "./figs-to-paper/05-log-reg-ROC-best-on-training.tiff",units = "px", dpi=300)
+```
 
-
-## resultados en conjunto de datos de testeo 
+## RESULTADOS en conjunto de datos de testeo 
 
 Primero extraigo el mejor modelo, como ya explicamos antes.
 
@@ -337,7 +359,9 @@ final_fit %>%
   mutate(model = "Logistic Regression") %>% 
   autoplot()
 ```
-
+```{r}
+ggsave(filename = "./figs-to-paper/06-log-reg-ROC-best-on-testing.tiff",units = "px", dpi=300)
+```
 
 Predecimos en el conjunto de datos de testeo, ese 25 % de datos que dejamos reservado para este momento.
 
@@ -375,7 +399,7 @@ conf_mat(lr_results, truth = PM10,
 # check
 nrow(data_test) == 177 + 16 +28 + 53
 ```
-#### Métricas de accurazy, sensitivity, specificity
+#### Métricas de accuracy, sensitivity, specificity
 
 ```{r}
 summary(conf_mat(lr_results, truth = PM10,
@@ -456,7 +480,9 @@ Graficamos resultados del tuneo de hiperparámetros.
 ```{r}
 autoplot(rf_res)
 ```
-
+```{r}
+ggsave(filename = "./figs-to-paper/07-RF-tunning.tiff",units = "px", dpi=300)
+```
 Observamos los mejores modelos.
 
 ```{r}
@@ -484,7 +510,7 @@ rf_auc <-
   mutate(model = "Random Forest")
 ```
 
-Comparación de ambos modelos en el entrenamiento.
+## ROC curve comparación de ambos modelos en el entrenamiento.
 
 ```{r}
 bind_rows(rf_auc, lr_auc) %>% 
@@ -493,6 +519,10 @@ bind_rows(rf_auc, lr_auc) %>%
   geom_abline(lty = 3) + 
   coord_equal() + 
   scale_color_viridis_d(option = "plasma", end = .6)
+```
+
+```{r}
+ggsave(filename = "./figs-to-paper/08-ROC-on-training-set-by-model.tiff",units = "px", dpi=300)
 ```
 
 Observamos que el modelo de random forest es mejor en todo el umbral de probabilidad de eventos.
@@ -531,6 +561,11 @@ last_rf_fit %>%
   autoplot()
 ```
 
+
+```{r}
+ggsave(filename = "./figs-to-paper/09-ROC-RF-testset.tiff",units = "px", dpi=300)
+```
+
 ### MATRIZ DE CONFUSION 
 
 ```{r}
@@ -538,12 +573,12 @@ last_rf_fit %>%
 RF_model <- extract_workflow(last_rf_fit)
 
 # Class prediction
-pred_class <- predict(RF_model,
+pred_class_rf <- predict(RF_model,
                       new_data = data_test,
                       type = "class")
 
 # Prediction Probabilities
-pred_proba <- predict(RF_model,
+pred_proba_rf <- predict(RF_model,
                       new_data = data_test,
                       type = "prob")
 ```
@@ -551,7 +586,7 @@ pred_proba <- predict(RF_model,
 ```{r}
 RF_results <- data_test %>%
               select(PM10) %>%
-              bind_cols(pred_class, pred_proba)
+              bind_cols(pred_class_rf, pred_proba_rf)
 
 ```
 
@@ -582,6 +617,72 @@ last_rf_fit %>%
   extract_fit_parsnip() %>% 
   vip(num_features = 10)
 ```
+```{r}
+ggsave(filename = "./figs-to-paper/10-RF-VIP.tiff",units = "px", dpi=300)
+```
+
 # COMPARACION
 
+## ROC CURVE
+
+
+```{r}
+lr_auc_f <- final_fit %>%
+  collect_predictions() %>% 
+  roc_curve(PM10, .pred_Bueno) %>% 
+  mutate(model = "Logistic Regression")
+
+```
+
+```{r}
+rf_auc_f <- last_rf_fit %>% 
+            collect_predictions() %>% 
+            roc_curve(PM10, .pred_Bueno) %>%  
+            mutate(model = "Random Forest")
+```
+
+
+```{r}
+bind_rows(rf_auc_f, lr_auc_f) %>% 
+  ggplot(aes(x = 1 - specificity, y = sensitivity, col = model)) + 
+  geom_path(lwd = 1.5, alpha = 0.8) +
+  geom_abline(lty = 3) + 
+  coord_equal() + 
+  scale_color_viridis_d(option = "plasma", end = .6)
+```
+```{r}
+ggsave(filename = "./figs-to-paper/11-ROC-on-test-set.tiff",units = "px", dpi=300)
+```
+
+## METRICAS
+
+```{r}
+m_rf <- summary(conf_mat(lr_results, truth = PM10,
+         estimate = .pred_class)) %>%  
+            mutate(model = "Random Forest")
+```
+
+
+```{r}
+m_lr <- summary(conf_mat(RF_results, truth = PM10,
+         estimate = .pred_class)) %>%  
+            mutate(model = "Logistic Regression")
+```
+
+#### TABLA COMPARATIVA METRICAS POR CADA MODELO
+
+```{r}
+bind_rows(m_rf, m_lr) %>% 
+  select(-one_of(c(".estimator")) ) %>% 
+  pivot_wider( names_from = "model", values_from = ".estimate")
+```
+
+Guardo los resultados en un archivo csv
+
+```{r}
+bind_rows(m_rf, m_lr) %>% 
+  select(-one_of(c(".estimator")) ) %>% 
+  pivot_wider( names_from = "model", values_from = ".estimate") %>%
+  write_csv(file="./figs-to-paper/final-results.csv")
+```
 
