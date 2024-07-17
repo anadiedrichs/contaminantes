@@ -5,12 +5,23 @@ format:
   pdf: default
 editor: source
 ---
+## Required packages
+```{r}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(DataExplorer)
+library(tidymodels)
+library(glmnet)
+library(vip)
+library(ranger)
+
+```
 
 ## Load dataset
 
 ```{r}
 
-library(readr)
 database <- read_rds("../data/database.rds")
 
 colnames(database)
@@ -27,25 +38,32 @@ summary(database)
 ## Cleaning
 
 -   Tener en cuenta Temperatura, Humedad relativa, Presión atmosférica, Velocidad de viento, CO, NO, NO2, O3 como variables predictoras de PM10.
-
+- Quitar la variable NOX 
 -   Remuevo NA
 
 ```{r}
-library(dplyr)
-library(tidyr)
-data <- database %>% select(-one_of(c("Estación","time"))) 
+data <- database %>% select(-one_of(c("Estación","time","NOX (ug/m3)"))) 
 data <- data[complete.cases(data),]
 ```
 
+
+* El dataset a entrenar tiene `{r} nrow(data)` muestras o filas.
+
+* Cuenta con `{r} ncol(data)` variables o columnas.
+
+* Las variables se llaman: `{r} colnames(data)`.
+
 ```{r}
-nrow(data)
+colnames(data)
 ```
+* Se lista un resumen de los datos.
 
 ```{r}
 summary(data)
 ```
 
--   Discretizar la variable Material Particulado (PM10) tomando como umbral el valor de 45 µg/m3, por debajo del cual se categorizará como "Bueno". Por encima de 45 µg/m3, se asignará el valor "Malo".
+*  Discretizar la variable Material Particulado (PM10) tomando como umbral el valor de 45 µg/m3, por debajo del cual se categorizará como "Bueno". Por encima de 45 µg/m3, se asignará el valor "Malo".
+* Se crea la variable (columna) con nombre PM10.
 
 ```{r}
 y_col_name <- colnames(data)[10]
@@ -53,10 +71,16 @@ y_cut <- cut(data$`PM10 (ug/m3)`,breaks=c(-10,45,400),labels = c("Bueno","Malo")
 data$PM10 <- y_cut
 ```
 
+Quitamos la columna con nombre "PM10 (ug/m3)" pues ahora usamos PM10
+
+```{r}
+
+data <- data %>% select(-one_of(c("PM10 (ug/m3)")))
+```
+
 # Pearson correlation
 
 ```{r}
-library(DataExplorer)
 plot_correlation(data)
 
 ```
@@ -71,19 +95,17 @@ plot_boxplot(data, by = "PM10")
 plot_bar(data)
 ```
 
-# 
 
-```{r}
-
-data <- data %>% select(-one_of(c("PM10 (ug/m3)")))
-```
 
 # Modelos
 
 ## Separación de sets de datos
 
+Los datos del dataset data, se usa un 75 % o 3/4 partes para entrenamiento y un 25% para testeo.
+
+
 ```{r}
-library(tidymodels)
+
 set.seed(123)
 splits      <- initial_split(data, strata = PM10, prop = 3/4) 
 
@@ -93,7 +115,18 @@ data_test  <- testing(splits)  # 25 % en testeo
 
 # Clasificación binaria
 
+Para desarrollar el clasificador binario entrenamos dos modelos:
+regresión logistica (logistic regression) y random forest.
+
+Usaremos la librería tidymodels.
+
 ## Regresion logistica
+
+* El modelo de regresión logística a usar está implementado en la librería glmnet.
+
+* penalty: representa cuánta de esa regularización utilizaremos. Este es un hiperparámetro que ajustaremos durante el entrenamiento para encontrar el mejor valor para hacer predicciones con nuestros datos. 
+
+* mixture = 1 significa que se usará una regularización L1 (L1 regularization, pure lasso model), mixture en un valor de uno significa que el modelo glmnet eliminará potencialmente los predictores irrelevantes y elegirá un modelo más simple.
 
 ```{r}
 lr_mod <- 
@@ -101,7 +134,11 @@ lr_mod <-
   set_engine("glmnet")
 ```
 
-Receta
+Receta. 
+
+* usamos los datos de entrenamiento (data_train) para predecir la variable PM10.
+
+* step_normalize() creates a specification of a recipe step that will normalize numeric data to have a standard deviation of one and a mean of zero.
 
 ```{r}
 lr_recipe <- 
@@ -109,7 +146,8 @@ lr_recipe <-
   step_normalize(all_predictors())
 ```
 
-Grid tunning
+Creamos el flujo de trabajo de tidymodels: el paso a paso de lo que queremos que ejecute.
+
 
 ```{r}
 lr_workflow <- 
@@ -118,18 +156,30 @@ lr_workflow <-
   add_recipe(lr_recipe)
 ```
 
-Since we have only one hyperparameter to tune here, we can set the grid up manually using a one-column tibble with 30 candidate values:
+## Grid tunning
+
+Dado que solo tenemos un hiperparámetro para ajustar aquí, podemos configurar la cuadrícula manualmente usando un tibble de una columna con 30 valores candidatos:
+
 
 ```{r}
 lr_reg_grid <- tibble(penalty = 10^seq(-4, -1, length.out = 30))
 
 ```
 
+Estos son los valores que se probarán en el entrenamiento: difererentes valores para el hiperparámetro penalty.
+
 ```{r}
 lr_reg_grid
 ```
 
-Conjunto de validación para usar durante el entrenamiento
+Con el argumento strata, el muestreo aleatorio (random sampling) se realiza dentro de la variable PM10 (the stratification variable). Esto puede ayudar a garantizar que las nuevas muestras tengan proporciones equivalentes a las del conjunto de datos original. En el caso de una variable categórica como PM10, el muestreo se realiza por separado dentro de cada clase.
+
+Para el tuneo del hiperparámetro penalty se utiliza un set de datos de validación.
+Dentro del dataset de entrenamiento, un 80 % se mantiene para entrenar, y se usa el 20 % para validar.
+
+Dentro del conjunto de datos de entrenamiento, usamos una porción del mismo como conjunto de validación para entrenar con los distintos valores de penalty (el grid tunning que realizaremos).
+
+
 
 ```{r}
 set.seed(234)
@@ -138,6 +188,10 @@ val_set <- validation_split(data_train,
                             strata = PM10, 
                             prop = 0.80)
 ```
+
+En el siguiente bloque de código se ejecuta todo: la receta o indicaciones que quedaron guardadas en lr_workflow más el tuneo de hiperparámetros tune_grid.
+
+Como métrica de evaluación del clasificador se utiliza ROC_AUC.
 
 ```{r}
 lr_res <- 
@@ -153,6 +207,10 @@ lr_res <-
 ```{r}
 lr_res
 ```
+## Resultados del tuneo de hiperparámetro
+
+Graficamos la variación de los valores de ROC ante diferentes valores de penalty.
+Mientras más alto es el valor de ROC, mejores son dichos modelos.
 
 ```{r}
 lr_plot <- 
@@ -167,7 +225,17 @@ lr_plot <-
 lr_plot 
 ```
 
+Este gráfico nos muestra que el rendimiento del modelo es generalmente mejor con los valores de penalización más bajos. 
+Esto sugiere que la mayoría de los predictores son importantes para el modelo. También vemos una caída pronunciada en el área bajo la curva ROC hacia los valores de penalización más altos. 
+Esto sucede porque una penalización lo suficientemente grande eliminará todos los predictores del modelo y, como era de esperar, la precisión predictiva se desploma usando menos predictores en el modelo.
+
+
 ## Mejores modelos de Logistic Regression
+
+Mostramos los mejores 15 modelos según la métrica ROC usando show_best. 
+Mientras más alto es el valor de ROC, mejores son dichos modelos.
+
+Los datos se muestran ordenados de menor a mayor según el valor de penalty.
 
 ```{r}
 top_models <-
@@ -178,15 +246,45 @@ top_models
 
 ```
 
-```{r}
-lr_best <- 
-  lr_res %>% 
-  collect_metrics() %>% 
-  arrange(penalty) %>% 
-  slice(12) # modelo 12
+Muestro la misma información anterior pero ordenada esta vez de forma 
+decreciente por el valor ROC auc
 
+Los datos se muestran ordenados de menor a mayor según el valor de penalty.
+
+```{r}
+lr_res %>% 
+  show_best(metric = "roc_auc", n = 15) %>% 
+  arrange(desc(mean)) 
+
+```
+
+Observamos que el valor de penalty de 0.0072789538 aparece en el PUESTO 1.
+
+Otra forma de observar esto es usando la función select_best()  que encuentra la mejor combinación de hiperparámetros basándose en una medida de performance.
+En nuestro caso es un sólo hiperparámetro, penalty para el modelo de regresión logística, 
+y la medida con la que evaluamos los modelos es ROC_AUC.
+
+
+```{r}
+  lr_res %>% 
+  select_best(metric = "roc_auc") 
+```
+Nos indica que el modelo nro 19 es el mejorcito y el valor de penalty 0.007278954. Aunque si observamos con 
+respecto a los otros valores de penalty menores, es muy poca la variación 
+de ROC.
+
+```{r}
+lr_best <- lr_res %>% 
+        collect_metrics() %>% 
+        arrange(desc(mean)) %>%
+        slice(1)
 lr_best
 ```
+
+Ahora tenemos nuestro modelo candidato: una logistic regresion con el valor de penalty mostrado
+arriba.
+
+Graficamos la curva ROC para ese modelo con su performance en el conjunto de entrenamiento.
 
 ```{r}
 lr_auc <- 
@@ -198,11 +296,115 @@ lr_auc <-
 autoplot(lr_auc)
 ```
 
-# Random Forest
+
+## resultados en conjunto de datos de testeo 
+
+Primero extraigo el mejor modelo, como ya explicamos antes.
 
 ```{r}
+best_model <- lr_res %>% 
+  select_best(metric = "roc_auc") 
+
+best_model
+```
+Actualizamos nuestro workflow de trabajo.
+
+```{r}
+final_wf <- lr_workflow %>%
+            finalize_workflow(best_model)
+
+final_wf
+```
+
+Podemos utilizar la función last_fit() con nuestro modelo finalizado; esta función ajusta el modelo finalizado en el conjunto de datos de entrenamiento completo y evalúa el modelo finalizado en los datos de prueba.
+
+```{r}
+final_fit <- 
+  final_wf %>%
+  last_fit(splits) 
+```
+
+```{r}
+final_fit %>%
+  collect_metrics()
+```
+### ROC CURVE SOBRE EL CONJUNTO DE TESTEO
+
+```{r}
+final_fit %>%
+  collect_predictions() %>% 
+  roc_curve(PM10, .pred_Bueno) %>% 
+  mutate(model = "Logistic Regression") %>% 
+  autoplot()
+```
+
+
+Predecimos en el conjunto de datos de testeo, ese 25 % de datos que dejamos reservado para este momento.
+
+```{r}
+
+lr_model <- extract_workflow(final_fit)
+
+# Class prediction
+pred_class <- predict(lr_model,
+                      new_data = data_test,
+                      type = "class")
+
+# Prediction Probabilities
+pred_proba <- predict(lr_model,
+                      new_data = data_test,
+                      type = "prob")
+```
+
+```{r}
+lr_results <- data_test %>%
+              select(PM10) %>%
+              bind_cols(pred_class, pred_proba)
+
+```
+
+### Matriz de confusión
+
+
+```{r}
+conf_mat(lr_results, truth = PM10,
+         estimate = .pred_class)
+```
+
+```{r}
+# check
+nrow(data_test) == 177 + 16 +28 + 53
+```
+#### Métricas de accurazy, sensitivity, specificity
+
+```{r}
+summary(conf_mat(lr_results, truth = PM10,
+         estimate = .pred_class))
+```
+#### F-measure
+
+```{r}
+f_meas(lr_results, truth = PM10,
+         estimate = .pred_class)
+```
+
+
+# Random Forest
+
+Vamos a entrenar un modelo de random forest para clasificación binaria.
+
+Para ello usaremos la implementación de random forest de la librería ranger.
+
+Durante el entrenamiento tunearemos dos hiperparámetros: mtry y min_n.
+
+Dejamos trees en 100.
+
+
+
+```{r}
+
+# nro de cores en el procesador de la COMPU donde esto se corre.
 cores <- parallel::detectCores()
-#cores
 
 rf_mod <- 
   rand_forest(mtry = tune(), min_n = tune(), trees = 100) %>% 
@@ -210,10 +412,15 @@ rf_mod <-
   set_mode("classification")
 ```
 
+Receta:
+vamos a usar PM10 como variable a predecir que contiene los valores que queremos clasificar.
+
 ```{r}
 rf_recipe <- 
   recipe(PM10 ~ ., data = data_train)
 ```
+
+Armado del workflow tidymodels con el modelo y receta.
 
 ```{r}
 rf_workflow <- 
@@ -221,6 +428,12 @@ rf_workflow <-
   add_model(rf_mod) %>% 
   add_recipe(rf_recipe)
 ```
+
+Se tunea usando el conjunto de datos de entrenamiento,
+dentro del mismo establecemos una porción para validación,
+lo mismo que realizamos en el apartado anterior.
+
+Se establece que la grilla sea de tamaño 25.
 
 ```{r}
 set.seed(345)
@@ -232,14 +445,27 @@ rf_res <-
             metrics = metric_set(roc_auc))
 ```
 
+Podemos observar todas los resultados para cada valor de mtry y min_n ejecutando lo siguiente:
+
+```{r}
+rf_res %>% collect_metrics()
+```
+
+Graficamos resultados del tuneo de hiperparámetros.
+
+```{r}
+autoplot(rf_res)
+```
+
+Observamos los mejores modelos.
+
 ```{r}
 rf_res %>% 
   show_best(metric = "roc_auc")
 ```
 
-```{r}
-autoplot(rf_res)
-```
+
+Nos quedamos con el mejor modelo.
 
 ```{r}
 rf_best <- 
@@ -247,8 +473,8 @@ rf_best <-
   select_best(metric = "roc_auc")
 rf_best
 ```
+Para filtrar las predicciones solo para nuestro mejor modelo, podemos usar el argumento de parámetros y pasarle nuestro tibble con los mejores valores de hiperparámetros del ajuste, al que llamamos rf_best:
 
-To filter the predictions for only our best random forest model, we can use the parameters argument and pass it our tibble with the best hyperparameter values from tuning, which we called rf_best:
 
 ```{r}
 rf_auc <- 
@@ -257,6 +483,8 @@ rf_auc <-
   roc_curve(PM10, .pred_Bueno) %>% 
   mutate(model = "Random Forest")
 ```
+
+Comparación de ambos modelos en el entrenamiento.
 
 ```{r}
 bind_rows(rf_auc, lr_auc) %>% 
@@ -267,14 +495,17 @@ bind_rows(rf_auc, lr_auc) %>%
   scale_color_viridis_d(option = "plasma", end = .6)
 ```
 
-The random forest is uniformly better across event probability thresholds.
+Observamos que el modelo de random forest es mejor en todo el umbral de probabilidad de eventos.
 
-### last random forest fit
+## RESULTADOS FINALES
+
+Armamos un modelo con los parámetros seleccionados, 
+lo entrenamos, y luego queremos que prediga usando el conjunto de testeo.
 
 ```{r}
 # the last model
 last_rf_mod <- 
-  rand_forest(mtry = 6, min_n = 10, trees = 100) %>% 
+  rand_forest(mtry = 4, min_n = 7, trees = 100) %>% 
   set_engine("ranger", num.threads = cores, importance = "impurity") %>% 
   set_mode("classification")
 
@@ -291,15 +522,7 @@ last_rf_fit <-
 
 last_rf_fit
 ```
-
-# Vip Variable importance
-
-```{r}
-library(vip)
-last_rf_fit %>% 
-  extract_fit_parsnip() %>% 
-  vip(num_features = 10)
-```
+### ROC curve plot 
 
 ```{r}
 last_rf_fit %>% 
@@ -307,3 +530,58 @@ last_rf_fit %>%
   roc_curve(PM10, .pred_Bueno) %>% 
   autoplot()
 ```
+
+### MATRIZ DE CONFUSION 
+
+```{r}
+
+RF_model <- extract_workflow(last_rf_fit)
+
+# Class prediction
+pred_class <- predict(RF_model,
+                      new_data = data_test,
+                      type = "class")
+
+# Prediction Probabilities
+pred_proba <- predict(RF_model,
+                      new_data = data_test,
+                      type = "prob")
+```
+
+```{r}
+RF_results <- data_test %>%
+              select(PM10) %>%
+              bind_cols(pred_class, pred_proba)
+
+```
+
+### Matriz de confusión
+
+
+```{r}
+conf_mat(RF_results, truth = PM10,
+         estimate = .pred_class)
+```
+### MÉTRICAS VARIAS
+
+```{r}
+summary(conf_mat(RF_results, truth = PM10,
+         estimate = .pred_class))
+```
+
+
+
+### Vip Variable importance
+
+Listamos de mayor a menor importancia las variables.
+Significa las variables que más colaboran en la predicción del modelo RF.
+
+```{r}
+
+last_rf_fit %>% 
+  extract_fit_parsnip() %>% 
+  vip(num_features = 10)
+```
+# COMPARACION
+
+
