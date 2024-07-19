@@ -138,7 +138,7 @@ Adjuntando el paquete: 'dplyr'</code></pre>
 ✖ dplyr::lag()      masks stats::lag()
 ✖ yardstick::spec() masks readr::spec()
 ✖ recipes::step()   masks stats::step()
-• Use tidymodels_prefer() to resolve common conflicts.</code></pre>
+• Search for functions across packages at https://www.tidymodels.org/find/</code></pre>
 </div>
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(glmnet)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stderr">
@@ -1128,6 +1128,73 @@ Prediction Bueno Malo
 </div>
 </section>
 </section>
+</section>
+<section id="r-session-info" class="level1">
+<h1>R session info</h1>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb131"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb131-1"><a href="#cb131-1" aria-hidden="true" tabindex="-1"></a><span class="fu">sessionInfo</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>R version 4.4.1 (2024-06-14)
+Platform: x86_64-pc-linux-gnu
+Running under: Ubuntu 22.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/atlas/libblas.so.3.10.3 
+LAPACK: /usr/lib/x86_64-linux-gnu/atlas/liblapack.so.3.10.3;  LAPACK version 3.10.0
+
+locale:
+ [1] LC_CTYPE=es_ES.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=es_ES.UTF-8        LC_COLLATE=es_ES.UTF-8    
+ [5] LC_MONETARY=es_ES.UTF-8    LC_MESSAGES=es_ES.UTF-8   
+ [7] LC_PAPER=es_ES.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=es_ES.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: America/Argentina/Buenos_Aires
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+other attached packages:
+ [1] stringr_1.5.1      ranger_0.16.0      vip_0.4.1          glmnet_4.1-8      
+ [5] Matrix_1.6-5       yardstick_1.3.1    workflowsets_1.1.0 workflows_1.1.4   
+ [9] tune_1.2.1         tibble_3.2.1       rsample_1.2.1      recipes_1.0.10    
+[13] purrr_1.0.2        parsnip_1.2.1      modeldata_1.3.0    infer_1.0.7       
+[17] ggplot2_3.5.1      dials_1.2.1        scales_1.3.0       broom_1.0.6       
+[21] tidymodels_1.2.0   DataExplorer_0.8.3 tidyr_1.3.1        dplyr_1.1.4       
+[25] readr_2.1.5       
+
+loaded via a namespace (and not attached):
+ [1] gridExtra_2.3       rlang_1.1.3         magrittr_2.0.3     
+ [4] furrr_0.3.1         compiler_4.4.1      vctrs_0.6.5        
+ [7] reshape2_1.4.4      lhs_1.1.6           crayon_1.5.2       
+[10] pkgconfig_2.0.3     shape_1.4.6.1       fastmap_1.2.0      
+[13] backports_1.5.0     ellipsis_0.3.2      labeling_0.4.3     
+[16] utf8_1.2.4          rmarkdown_2.27      prodlim_2023.08.28 
+[19] tzdb_0.4.0          bit_4.0.5           xfun_0.44          
+[22] jsonlite_1.8.8      parallel_4.4.1      R6_2.5.1           
+[25] stringi_1.8.4       parallelly_1.37.1   rpart_4.1.23       
+[28] lubridate_1.9.3     Rcpp_1.0.12         iterators_1.0.14   
+[31] knitr_1.46          future.apply_1.11.2 splines_4.4.1      
+[34] nnet_7.3-19         igraph_2.0.3        timechange_0.3.0   
+[37] tidyselect_1.2.1    rstudioapi_0.16.0   yaml_2.3.8         
+[40] timeDate_4032.109   codetools_0.2-19    listenv_0.9.1      
+[43] lattice_0.22-5      plyr_1.8.9          withr_3.0.0        
+[46] evaluate_0.23       future_1.33.2       survival_3.7-0     
+[49] pillar_1.9.0        foreach_1.5.2       generics_0.1.3     
+[52] vroom_1.6.5         hms_1.1.3           munsell_0.5.1      
+[55] globals_0.16.3      class_7.3-22        glue_1.7.0         
+[58] tools_4.4.1         data.table_1.15.4   gower_1.0.1        
+[61] grid_4.4.1          ipred_0.9-14        colorspace_2.1-0   
+[64] networkD3_0.4       cli_3.6.2           DiceDesign_1.10    
+[67] fansi_1.0.6         viridisLite_0.4.2   lava_1.8.0         
+[70] gtable_0.3.5        GPfit_1.0-8         digest_0.6.35      
+[73] htmlwidgets_1.6.4   farver_2.1.2        htmltools_0.5.8.1  
+[76] lifecycle_1.0.4     hardhat_1.3.1       bit64_4.0.5        
+[79] MASS_7.3-60        </code></pre>
+</div>
+</div>
 </section>
 
 </main>

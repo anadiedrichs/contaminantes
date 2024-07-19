@@ -686,3 +686,9 @@ bind_rows(m_rf, m_lr) %>%
   write_csv(file="./figs-to-paper/final-results.csv")
 ```
 
+# R session info
+
+```{r}
+sessionInfo()
+```
+
