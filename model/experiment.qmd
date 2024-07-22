@@ -656,27 +656,47 @@ ggsave(filename = "./figs-to-paper/11-ROC-on-test-set.tiff",units = "px", dpi=30
 
 ## METRICAS
 
+Agrego una fila con el resultado ROC_AUC 
+
 ```{r}
-m_rf <- summary(conf_mat(lr_results, truth = PM10,
-         estimate = .pred_class)) %>%  
-            mutate(model = "Random Forest")
+roc_auc(lr_results, truth = PM10, .pred_Bueno)
+```
+
+```{r}
+m_lr <- summary(conf_mat(lr_results, truth = PM10,
+         estimate = .pred_class)) %>% 
+        bind_rows(roc_auc(lr_results, truth = PM10, .pred_Bueno)) %>%
+        mutate(model = "Logistic Regression")
 ```
 
 
 ```{r}
-m_lr <- summary(conf_mat(RF_results, truth = PM10,
-         estimate = .pred_class)) %>%  
-            mutate(model = "Logistic Regression")
+m_lr
 ```
+
+
+```{r}
+roc_auc(RF_results, truth = PM10, .pred_Bueno)
+```
+```{r}
+m_rf <- summary(conf_mat(RF_results, truth = PM10,estimate = .pred_class)) %>%  
+        bind_rows(roc_auc(RF_results, truth = PM10, .pred_Bueno))  %>%
+        mutate(model = "Random Forest")
+```
+
+```{r}
+m_rf
+```
+
 
 #### TABLA COMPARATIVA METRICAS POR CADA MODELO
+
 
 ```{r}
 bind_rows(m_rf, m_lr) %>% 
   select(-one_of(c(".estimator")) ) %>% 
   pivot_wider( names_from = "model", values_from = ".estimate")
 ```
-
 Guardo los resultados en un archivo csv
 
 ```{r}
