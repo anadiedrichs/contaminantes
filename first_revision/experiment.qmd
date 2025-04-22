@@ -1,10 +1,24 @@
 ---
-title: "document"
+title: "Data analysis & modeling report"
 format: 
   html: default
   pdf: default
 editor: source
 ---
+
+```{r echo=FALSE}
+
+# Restaura el entorno renv si existe el lockfile
+if (file.exists("renv.lock")) {
+  if (!requireNamespace("renv", quietly = TRUE)) {
+    install.packages("renv")
+  }
+  renv::restore()
+}
+
+```
+
+
 # Required packages
 ```{r}
 library(readr)
@@ -16,13 +30,14 @@ library(glmnet)
 library(vip)
 library(ranger)
 library(readxl)
+library(kernelshap)
+library(shapviz)
 ```
 
 # Load dataset
 
 ```{r}
 
-# database <- read_rds("../data/database.rds")
 database <- read_excel("database_2021_2024_con out.xlsx", 
     col_types = c("date", "numeric", "text", 
         "date", "numeric", "numeric", "numeric", 
@@ -159,7 +174,7 @@ ggsave(filename = "./figs-to-paper/03-dataset-desbalanceado.tiff",units = "px", 
 
 ## Slipt train & test set
 
-Los datos del dataset data, se usa un 75 % o 3/4 partes para entrenamiento y un 25% para testeo.
+We split the dataset to use a 75 % for training and a 25 % for testing.
 
 
 ```{r}
@@ -167,8 +182,8 @@ Los datos del dataset data, se usa un 75 % o 3/4 partes para entrenamiento y un 
 set.seed(123)
 splits      <- initial_split(data, strata = PM10, prop = 3/4) 
 
-data_train <- training(splits) # 75 % entrenamiento
-data_test  <- testing(splits)  # 25 % en testeo
+data_train <- training(splits) # 75 % train set
+data_test  <- testing(splits)  # 25 % testing set
 ```
 
 # Binary clasification with Logistic regression
@@ -716,8 +731,8 @@ Definimos la función de predicción (devolver solo numeric)
 pred_fun <- function(object, newdata) {
   # Obtener la matriz de probabilidades
   prob_matrix <- predict(object, data = newdata, response = "prob")
-  # return(prob_matrix$predictions[,1]) # return predictions for class Good
-  return(prob_matrix$predictions[,2]) # return predictions for class Bad
+  return(prob_matrix$predictions[,1]) # return predictions for class Good
+  # return(prob_matrix$predictions[,2]) # return predictions for class Bad
   
 }
 
