@@ -188,26 +188,21 @@ data_test  <- testing(splits)  # 25 % testing set
 
 # Binary clasification with Logistic regression
 
-Para desarrollar el clasificador binario entrenamos dos modelos:
-regresión logistica (logistic regression) y random forest.
-
-Usaremos la librería tidymodels.
-
-* El modelo de regresión logística a usar está implementado en la librería glmnet.
-
-* penalty: representa cuánta de esa regularización utilizaremos. Este es un hiperparámetro que ajustaremos durante el entrenamiento para encontrar el mejor valor para hacer predicciones con nuestros datos. 
-
-* mixture = 1 significa que se usará una regularización L1 (L1 regularization, pure lasso model), mixture en un valor de uno significa que el modelo glmnet eliminará potencialmente los predictores irrelevantes y elegirá un modelo más simple.
+* We train two models to develop the binary classifier: logistic regression and random forest. 
+* We will use the tidymodels library.
+* The logistic regression model is implemented in the glmnet package.
+* mixture = 1 means L1 regularization (a pure Lasso model) will be used. A mixture value of 1 means that the glmnet model will potentially eliminate irrelevant predictors and choose a simpler model.
+* penalty: This hyperparameter represents how much of this regularization we will use. We will adjust it during training to find the best value for making predictions with our data.
 
 ```{r}
 lr_mod <- 
   logistic_reg(penalty = tune(), mixture = 1) %>% 
-  set_engine("glmnet")
+  set_engine("glmnet") # we use the package glmnet
 ```
 
-Receta. 
+## Tidymodels recipe
 
-* usamos los datos de entrenamiento (data_train) para predecir la variable PM10.
+* data_train dataset will be used to train the logistic model. We want to predict the variable PM10.
 
 * step_normalize() creates a specification of a recipe step that will normalize numeric data to have a standard deviation of one and a mean of zero.
 
@@ -217,39 +212,39 @@ lr_recipe <-
   step_normalize(all_predictors())
 ```
 
-Creamos el flujo de trabajo de tidymodels: el paso a paso de lo que queremos que ejecute.
+## Tidymodels workflow
 
 
 ```{r}
 lr_workflow <- 
-  workflow() %>% 
-  add_model(lr_mod) %>% 
-  add_recipe(lr_recipe)
+  workflow() %>%  # create a workflow
+  add_model(lr_mod) %>% # add the model
+  add_recipe(lr_recipe) # add the recipe
 ```
 
 ## Grid tunning
 
-Dado que solo tenemos un hiperparámetro para ajustar aquí, podemos configurar la cuadrícula manualmente usando un tibble de una columna con 30 valores candidatos:
 
+We have a hyperparameter to adjust: the penalty for L1 regularization. We can configure the grid manually using a one-column table with 30 candidate values.
 
 ```{r}
 lr_reg_grid <- tibble(penalty = 10^seq(-4, -1, length.out = 30))
 
 ```
 
-Estos son los valores que se probarán en el entrenamiento: difererentes valores para el hiperparámetro penalty.
+List of the different values for the penalty hyperparameter to try in the training phase.
 
 ```{r}
 lr_reg_grid
 ```
+## Validation set 
 
-Con el argumento strata, el muestreo aleatorio (random sampling) se realiza dentro de la variable PM10 (the stratification variable). Esto puede ayudar a garantizar que las nuevas muestras tengan proporciones equivalentes a las del conjunto de datos original. En el caso de una variable categórica como PM10, el muestreo se realiza por separado dentro de cada clase.
+With the strata argument, random sampling is performed within the variable PM10 (the stratification variable). This can help ensure that the new samples have proportions equivalent to those in the original dataset. In the case of a categorical variable like PM10, sampling is performed separately within each class.
 
-Para el tuneo del hiperparámetro penalty se utiliza un set de datos de validación.
-Dentro del dataset de entrenamiento, un 80 % se mantiene para entrenar, y se usa el 20 % para validar.
+A validation dataset is used to tune the penalty hyperparameter.
+Within the training dataset, 80% is kept for training and 20% for validation.
 
-Dentro del conjunto de datos de entrenamiento, usamos una porción del mismo como conjunto de validación para entrenar con los distintos valores de penalty (el grid tunning que realizaremos).
-
+Within the training dataset, we use a portion of it as a validation set to train with the different penalty values ​​(the grid tuning we will perform).
 
 
 ```{r}
@@ -260,9 +255,11 @@ val_set <- validation_split(data_train,
                             prop = 0.80)
 ```
 
-En el siguiente bloque de código se ejecuta todo: la receta o indicaciones que quedaron guardadas en lr_workflow más el tuneo de hiperparámetros tune_grid.
+## Training execution 
 
-Como métrica de evaluación del clasificador se utiliza ROC_AUC.
+* The following code block executes everything: the recipe or instructions saved in `lr_workflow` plus the hyperparameter tuning (tune_grid).
+
+* ROC_AUC is the classifier evaluation metric.
 
 ```{r}
 lr_res <- 
@@ -278,10 +275,12 @@ lr_res <-
 ```{r}
 lr_res
 ```
-## Resultados del tuneo de hiperparámetro
 
-Graficamos la variación de los valores de ROC ante diferentes valores de penalty.
-Mientras más alto es el valor de ROC, mejores son dichos modelos.
+## Hyperparameter tuning results
+
+We plot the variation in ROC values for different penalty values.
+
+The higher the ROC value, the better the models.
 
 ```{r}
 lr_plot <- 
@@ -302,17 +301,16 @@ ggsave(filename = "./figs-to-paper/04-log-reg-tunning-results.tiff",units = "px"
 
 
 
-Este gráfico nos muestra que el rendimiento del modelo es generalmente mejor con los valores de penalización más bajos. 
-Esto sugiere que la mayoría de los predictores son importantes para el modelo. También vemos una caída pronunciada en el área bajo la curva ROC hacia los valores de penalización más altos. 
-Esto sucede porque una penalización lo suficientemente grande eliminará todos los predictores del modelo y, como era de esperar, la precisión predictiva se desploma usando menos predictores en el modelo.
+The graph above shows that model performance is generally better with lower penalty values, which suggests that most predictors are important to the model. 
 
+We also see a steep drop in the area under the ROC curve toward higher penalty values, which happens because a large enough penalty will remove all predictors from the model, and, as expected, predictive accuracy plummets with fewer predictors in the model.
 
-## Mejores modelos de Logistic Regression
+## Best Logistic Regression Models
 
-Mostramos los mejores 15 modelos según la métrica ROC usando show_best. 
-Mientras más alto es el valor de ROC, mejores son dichos modelos.
+We display the top 15 models based on the ROC metric using show_best.
+The higher the ROC value, the better the models.
 
-Los datos se muestran ordenados de menor a mayor según el valor de penalty.
+The data is displayed in order from lowest to highest penalty value.
 
 ```{r}
 top_models <-
@@ -323,32 +321,28 @@ top_models
 
 ```
 
-Muestro la misma información anterior pero ordenada esta vez de forma 
-decreciente por el valor ROC auc
+The same information as above, but this time sorted by descending ROC_AUC value.
 
-Los datos se muestran ordenados de menor a mayor según el valor de penalty.
+The data is displayed sorted from lowest to highest according to the penalty value.
+
 
 ```{r}
-lr_res %>% 
-  show_best(metric = "roc_auc", n = 15) %>% 
+top_models %>% 
   arrange(desc(mean)) 
 
 ```
 
-Observamos que el valor de penalty de 0.0072789538 aparece en el PUESTO 1.
-
-Otra forma de observar esto es usando la función select_best()  que encuentra la mejor combinación de hiperparámetros basándose en una medida de performance.
-En nuestro caso es un sólo hiperparámetro, penalty para el modelo de regresión logística, 
-y la medida con la que evaluamos los modelos es ROC_AUC.
 
 
 ```{r}
-  lr_res %>% 
-  select_best(metric = "roc_auc") 
+penalty_value <-  lr_res %>% 
+  select_best(metric = "roc_auc") %>% # find the best hyperparameter combination given a performance measure
+  select(penalty)
 ```
-Nos indica que el modelo nro 19 es el mejorcito y el valor de penalty 0.007278954. Aunque si observamos con 
-respecto a los otros valores de penalty menores, es muy poca la variación 
-de ROC.
+
+The best logistic regression model is the one with penalty = `{r} penalty_value`.
+
+We observed minimal ROC variation at the other penalty values.
 
 ```{r}
 lr_best <- lr_res %>% 
@@ -358,10 +352,8 @@ lr_best <- lr_res %>%
 lr_best
 ```
 
-Ahora tenemos nuestro modelo candidato: una logistic regresion con el valor de penalty mostrado
-arriba.
+## Roc curve in training set
 
-Graficamos la curva ROC para ese modelo con su performance en el conjunto de entrenamiento.
 
 ```{r}
 lr_auc <- 
@@ -376,9 +368,9 @@ autoplot(lr_auc)
 ggsave(filename = "./figs-to-paper/05-log-reg-ROC-best-on-training.tiff",units = "px", dpi=300)
 ```
 
-## RESULTADOS en conjunto de datos de testeo 
+## Results (test set)
 
-Primero extraigo el mejor modelo, como ya explicamos antes.
+Get the best model.
 
 ```{r}
 best_model <- lr_res %>% 
@@ -386,7 +378,7 @@ best_model <- lr_res %>%
 
 best_model
 ```
-Actualizamos nuestro workflow de trabajo.
+Update the workflow.
 
 ```{r}
 final_wf <- lr_workflow %>%
@@ -395,7 +387,7 @@ final_wf <- lr_workflow %>%
 final_wf
 ```
 
-Podemos utilizar la función last_fit() con nuestro modelo finalizado; esta función ajusta el modelo finalizado en el conjunto de datos de entrenamiento completo y evalúa el modelo finalizado en los datos de prueba.
+We can use the last_fit() function with our finalized model; this function fits the finalized model on the full training dataset and evaluates the finalized model on the test data.
 
 ```{r}
 final_fit <- 
@@ -407,7 +399,7 @@ final_fit <-
 final_fit %>%
   collect_metrics()
 ```
-### ROC CURVE SOBRE EL CONJUNTO DE TESTEO
+### ROC CURVE IN TEST SET
 
 ```{r}
 final_fit %>%
@@ -420,7 +412,7 @@ final_fit %>%
 ggsave(filename = "./figs-to-paper/06-log-reg-ROC-best-on-testing.tiff",units = "px", dpi=300)
 ```
 
-Predecimos en el conjunto de datos de testeo, ese 25 % de datos que dejamos reservado para este momento.
+We use the best LR model to predict on the test set.
 
 ```{r}
 
@@ -444,19 +436,15 @@ lr_results <- data_test %>%
 
 ```
 
-### Matriz de confusión
-
+### Confusion matrix ( on test set)
 
 ```{r}
 conf_mat(lr_results, truth = PM10,
          estimate = .pred_class)
 ```
 
-```{r}
-# check
-nrow(data_test) == 260 + 61 +17 + 56
-```
-#### Métricas de accuracy, sensitivity, specificity
+
+#### Accuracy, sensitivity, specificity, etc
 
 ```{r}
 summary(conf_mat(lr_results, truth = PM10,
@@ -472,67 +460,69 @@ f_meas(lr_results, truth = PM10,
 
 # Random Forest
 
-Vamos a entrenar un modelo de random forest para clasificación binaria.
+We train a random forest model for binary classification.
 
-Para ello usaremos la implementación de random forest de la librería ranger.
+We use the random forest implementation from the ranger package.
 
-Durante el entrenamiento tunearemos dos hiperparámetros: mtry y min_n.
+We tune two hyperparameters: mtry and min_n, in training time.
 
-Dejamos trees en 100.
-
+We set the parameter trees to 100.
 
 
 ```{r}
 
-# nro de cores en el procesador de la COMPU donde esto se corre.
+# detect the number of cores from the CPU
 cores <- parallel::detectCores()
 
 rf_mod <- 
   rand_forest(mtry = tune(), min_n = tune(), trees = 100) %>% 
-  set_engine("ranger", num.threads = cores) %>% 
-  set_mode("classification")
+  set_engine("ranger", num.threads = cores) %>% # use the ranger package
+  set_mode("classification") # classification task
 ```
 
-Receta:
-vamos a usar PM10 como variable a predecir que contiene los valores que queremos clasificar.
+## Tidymodels recipe
+
+
+* data_train dataset will be used to train the RF model. 
+* We want to predict the variable PM10.
 
 ```{r}
 rf_recipe <- 
   recipe(PM10 ~ ., data = data_train)
 ```
 
-Armado del workflow tidymodels con el modelo y receta.
+## Tidymodels workflow setup
 
 ```{r}
 rf_workflow <- 
   workflow() %>% 
-  add_model(rf_mod) %>% 
-  add_recipe(rf_recipe)
+  add_model(rf_mod) %>% ## add model RF
+  add_recipe(rf_recipe) ## add recipe
 ```
 
-Se tunea usando el conjunto de datos de entrenamiento,
-dentro del mismo establecemos una porción para validación,
-lo mismo que realizamos en el apartado anterior.
+## RF training 
 
-Se establece que la grilla sea de tamaño 25.
+Within the training dataset, we use a portion of it as a validation set to tune the hyperparameters (mtry and min_n).
 
 ```{r}
 set.seed(345)
 rf_res <- 
   rf_workflow %>% 
   tune_grid(val_set,
-            grid = 25,
+            grid = 25, # grid size
             control = control_grid(save_pred = TRUE),
             metrics = metric_set(roc_auc))
 ```
 
-Podemos observar todas los resultados para cada valor de mtry y min_n ejecutando lo siguiente:
+## RF hyperparameter tunning results
+
+Results for each value of mtry and min_n:
 
 ```{r}
 rf_res %>% collect_metrics()
 ```
 
-Graficamos resultados del tuneo de hiperparámetros.
+Plot hyperparameter tunning results.
 
 ```{r}
 autoplot(rf_res)
@@ -540,15 +530,17 @@ autoplot(rf_res)
 ```{r}
 ggsave(filename = "./figs-to-paper/07-RF-tunning.tiff",units = "px", dpi=300)
 ```
-Observamos los mejores modelos.
+
+## RF best models
+
+List the best RF models.
 
 ```{r}
 rf_res %>% 
   show_best(metric = "roc_auc")
 ```
 
-
-Nos quedamos con el mejor modelo.
+We show the best one.
 
 ```{r}
 rf_best <- 
@@ -556,10 +548,14 @@ rf_best <-
   select_best(metric = "roc_auc")
 rf_best
 ```
-Para filtrar las predicciones solo para nuestro mejor modelo, podemos usar el argumento de parámetros y pasarle nuestro tibble con los mejores valores de hiperparámetros del ajuste, al que llamamos rf_best:
+
+## RF ROC curve dataset generation
+
 
 
 ```{r}
+# Para filtrar las predicciones solo para nuestro mejor modelo, podemos usar el argumento de parámetros y pasarle nuestro tibble con los mejores valores de hiperparámetros del ajuste, al que llamamos rf_best:
+
 rf_auc <- 
   rf_res %>% 
   collect_predictions(parameters = rf_best) %>% 
@@ -567,7 +563,7 @@ rf_auc <-
   mutate(model = "Random Forest")
 ```
 
-## ROC curve comparación de ambos modelos en el entrenamiento.
+## ROC curve to compare Logistic regression model vs Random Forest model .
 
 ```{r}
 bind_rows(rf_auc, lr_auc) %>% 
@@ -582,13 +578,13 @@ bind_rows(rf_auc, lr_auc) %>%
 ggsave(filename = "./figs-to-paper/08-ROC-on-training-set-by-model.tiff",units = "px", dpi=300)
 ```
 
-Observamos que el modelo de random forest es mejor en todo el umbral de probabilidad de eventos.
+Conclusion: the RF model was superior across the entire event probability threshold.
 
-## RESULTADOS FINALES
+## Final results
 
-Armamos un modelo con los parámetros seleccionados, 
-lo entrenamos, y luego queremos que prediga usando el conjunto de testeo.
 
+
+We built a model with the selected parameters, trained it, then predict using the test set.
 
 ```{r}
 # the last model
@@ -610,7 +606,8 @@ last_rf_fit <-
 
 last_rf_fit
 ```
-### ROC curve plot 
+
+### ROC curve plot for Random Forest ( test set)
 
 ```{r}
 last_rf_fit %>% 
@@ -624,7 +621,7 @@ last_rf_fit %>%
 ggsave(filename = "./figs-to-paper/09-ROC-RF-testset.tiff",units = "px", dpi=300)
 ```
 
-### MATRIZ DE CONFUSION 
+## Random Forest confusion matrix (test set) 
 
 ```{r}
 
@@ -648,14 +645,15 @@ RF_results <- data_test %>%
 
 ```
 
-### Matriz de confusión
+Print the confusion matrix.
 
 
 ```{r}
 conf_mat(RF_results, truth = PM10,
          estimate = .pred_class)
 ```
-### MÉTRICAS VARIAS
+
+## Summary of metrics
 
 ```{r}
 summary(conf_mat(RF_results, truth = PM10,
@@ -664,16 +662,17 @@ summary(conf_mat(RF_results, truth = PM10,
 
 
 
-### Vip Variable importance
+### Variable importance Score
 
-Listamos de mayor a menor importancia las variables.
-Significa las variables que más colaboran en la predicción del modelo RF.
+Compute the VIP.
+
+When using the vip function with a random forest model, the default method computes the mean decrease in impurity (or Gini importance) for each variable. This is calculated by accumulating the improvement in the split criterion at each split in each tree, and normalizing by the standard deviation of the differences.
 
 ```{r}
 
 last_rf_fit %>% 
   extract_fit_parsnip() %>% 
-  vip(num_features = 10)
+  vip(num_features = 10) # check vip package documentation
 ```
 ```{r}
 ggsave(filename = "./figs-to-paper/10-RF-VIP.tiff",units = "px", dpi=300)
@@ -683,6 +682,7 @@ ggsave(filename = "./figs-to-paper/10-RF-VIP.tiff",units = "px", dpi=300)
 
 Recordamos que rf_best no es un objeto del modelo entrenado, sino un conjunto de hiperparámetros seleccionados que representan el mejor modelo.
 Requiero un objeto de la libreria ranger que represente el mejor modelo randoom forest, para luego ser usado para SHAP 
+
 #### Setup and computing
 
 ```{r}
@@ -693,24 +693,28 @@ rf_best
 
 
 ```{r}
-# Ahora finalizo el workflow:
+# workflow setup: update the hyperparameters
 final_rf_workflow <- rf_workflow %>% finalize_workflow(rf_best)
 
-# Entreno el modelo para dichos hiperparámetros.
+# Train a RF model
 rf_final_fit <- final_rf_workflow %>% fit(data = data_train)
 
 
 ```
 
 ```{r}
-
-# Extraer el modelo final (por ejemplo un ranger::ranger object)
+# Get the final model (a ranger::ranger object)
 modelo_final <- extract_fit_parsnip(rf_final_fit)$fit
 modelo_final
 ```
+
+`modelo_final` is an object of the class `{r} class(modelo_final)`
+
 ```{r}
 class(modelo_final)
 ```
+
+We create a dataset called X with all the predictors features (without PM10)
 
 ```{r}
 library(fastshap)
@@ -723,13 +727,13 @@ head(X)
 
 ```
 
-Definimos la función de predicción (devolver solo numeric)
+Prediction function definition
 
 ```{r}
 # 
 
 pred_fun <- function(object, newdata) {
-  # Obtener la matriz de probabilidades
+  # get the probabilities matrix
   prob_matrix <- predict(object, data = newdata, response = "prob")
   return(prob_matrix$predictions[,1]) # return predictions for class Good
   # return(prob_matrix$predictions[,2]) # return predictions for class Bad
@@ -744,7 +748,7 @@ pred_fun <- function(object, newdata) {
 
 ```
 
-Calculate SHAP values
+Calculate SHAP values with fastshap package
 
 ```{r }
 library(kernelshap)
@@ -761,6 +765,8 @@ shap_values <- fastshap::explain(
 ```
 
 #### SHAP values visualization
+
+Importance plot.
 
 ```{r}
 shap <- shapviz(shap_values, X = X )
@@ -831,7 +837,7 @@ bind_rows(rf_auc_f, lr_auc_f) %>%
 ggsave(filename = "./figs-to-paper/11-ROC-on-test-set.tiff",units = "px", dpi=300)
 ```
 
-## METRICAS
+# Metrics
 
 Agrego una fila con el resultado ROC_AUC 
 
@@ -866,7 +872,7 @@ m_rf
 ```
 
 
-#### TABLA COMPARATIVA METRICAS POR CADA MODELO
+## Results table to compare each model
 
 
 ```{r}
@@ -874,7 +880,9 @@ bind_rows(m_rf, m_lr) %>%
   select(-one_of(c(".estimator")) ) %>% 
   pivot_wider( names_from = "model", values_from = ".estimate")
 ```
-Guardo los resultados en un archivo csv
+
+
+Save the results in a csv file.
 
 ```{r}
 bind_rows(m_rf, m_lr) %>% 
