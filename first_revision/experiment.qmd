@@ -113,7 +113,7 @@ colnames(data)
 * Translate names to English
 
 ```{r}
-colnames(data)[1:4] <- c("Temperature","Humidity","Pressure","Wind velocity")
+colnames(data)[1:4] <- c("Temperature","Humidity","Pressure","Wind speed")
 ```
 
 ```{r}
@@ -662,7 +662,7 @@ summary(conf_mat(RF_results, truth = PM10,
 
 
 
-### Variable importance Score
+## Variable importance Score
 
 Compute the VIP.
 
@@ -678,12 +678,12 @@ last_rf_fit %>%
 ggsave(filename = "./figs-to-paper/10-RF-VIP.tiff",units = "px", dpi=300)
 ```
 
-### SHAP values 
+## SHAP values 
 
 Recordamos que rf_best no es un objeto del modelo entrenado, sino un conjunto de hiperparámetros seleccionados que representan el mejor modelo.
 Requiero un objeto de la libreria ranger que represente el mejor modelo randoom forest, para luego ser usado para SHAP 
 
-#### Setup and computing
+### Setup and computing
 
 ```{r}
 rf_best <- rf_res %>% select_best(metric = "roc_auc")
@@ -727,12 +727,13 @@ head(X)
 
 ```
 
-Prediction function definition
+#### Prediction function definition for class Good
+
 
 ```{r}
 # 
 
-pred_fun <- function(object, newdata) {
+pred_fun_good <- function(object, newdata) {
   # get the probabilities matrix
   prob_matrix <- predict(object, data = newdata, response = "prob")
   return(prob_matrix$predictions[,1]) # return predictions for class Good
@@ -748,28 +749,55 @@ pred_fun <- function(object, newdata) {
 
 ```
 
+#### Prediction function definition for class Bad
+
+```{r}
+pred_fun_bad <- function(object, newdata) {
+  # get the probabilities matrix
+  prob_matrix <- predict(object, data = newdata, response = "prob")
+  return(prob_matrix$predictions[,2]) # return predictions for class Bad
+  
+}
+```
+
+
+#### SHAP values for class Good
+
 Calculate SHAP values with fastshap package
 
 ```{r }
-library(kernelshap)
-library(shapviz)
 
 # Cálculo de SHAP values con fastshap
-shap_values <- fastshap::explain(
+shap_values_good <- fastshap::explain(
   object = modelo_final,
   X = X,
-  pred_wrapper = pred_fun,
+  pred_wrapper = pred_fun_good,
   nsim = 100, # Aumentar para mayor precisión
 )
 
 ```
 
-#### SHAP values visualization
+#### SHAP values for class Bad
+
+
+```{r }
+
+# Cálculo de SHAP values con fastshap
+shap_values_bad <- fastshap::explain(
+  object = modelo_final,
+  X = X,
+  pred_wrapper = pred_fun_bad,
+  nsim = 100, # Aumentar para mayor precisión
+)
+
+```
+
+### Plots for class Good
 
 Importance plot.
 
 ```{r}
-shap <- shapviz(shap_values, X = X )
+shap <- shapviz(shap_values_good, X = X )
 
 # Gráfico de importancia
 sv_importance(shap)
@@ -780,18 +808,18 @@ sv_importance(shap)
   ggtitle("SHAP importance")
 ```
 ```{r}
-ggsave(filename = "./figs-to-paper/12-SHAP_importance.tiff",units = "px", dpi=300)
+ggsave(filename = "./figs-to-paper/12-SHAP_importance_good.tiff",units = "px", dpi=300)
 ```
 
 ```{r}
 sv_importance(shap,"bee")
 ```
 ```{r}
-ggsave(filename = "./figs-to-paper/13-SHAP_importance_bee.tiff",units = "px", dpi=300)
+ggsave(filename = "./figs-to-paper/13-SHAP_importance_bee_good.tiff",units = "px", dpi=300)
 ```
 
 
-#### Plot interaction
+Plot interaction
 
 ```{r}
 colnames(data)[-9]
@@ -801,7 +829,48 @@ colnames(data)[-9]
 sv_dependence(shap, colnames(data)[-9])
 ```
 ```{r}
-ggsave(filename = "./figs-to-paper/14-SHAP_dependence.tiff",units = "px", dpi=300)
+ggsave(filename = "./figs-to-paper/14-SHAP_dependence_good.tiff",units = "px", dpi=300)
+```
+
+
+### Plots for class Bad
+
+Importance plot.
+
+```{r}
+shap <- shapviz(shap_values_bad, X = X )
+
+# Gráfico de importancia
+sv_importance(shap)
+
+```
+```{r}
+ sv_importance(shap,show_numbers = TRUE) + 
+  ggtitle("SHAP importance")
+```
+```{r}
+ggsave(filename = "./figs-to-paper/12-SHAP_importance_bad.tiff",units = "px", dpi=300)
+```
+
+```{r}
+sv_importance(shap,"bee")
+```
+```{r}
+ggsave(filename = "./figs-to-paper/13-SHAP_importance_bee_bad.tiff",units = "px", dpi=300)
+```
+
+
+Plot interaction
+
+```{r}
+colnames(data)[-9]
+```
+
+```{r}
+sv_dependence(shap, colnames(data)[-9])
+```
+```{r}
+ggsave(filename = "./figs-to-paper/14-SHAP_dependence_bad.tiff",units = "px", dpi=300)
 ```
 
 # FINAL RESULTS 
